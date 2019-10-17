@@ -3,9 +3,10 @@
 #include <assert.h>
 #include <string>
 #include <iostream>
+#include <cstring>
 
-#define RANKS_PER_FILE 4
-#define BUFFER_SIZE    400
+int RANKS_PER_FILE;
+int BUFFER_SIZE; // number of elements in double
 
 bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm)
 {
@@ -161,9 +162,9 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
   offset[0] = displs;
   hid_t mem_dataspace_id = H5Screate_simple(ndims, count, NULL);
 
-  /*  
+  /*
    * Select hyperslab in the file.
-   */  
+   */
   hid_t file_dataspace_id = H5Dget_space(dataset_id);
   H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
 
@@ -172,7 +173,7 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
   H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_COLLECTIVE);
     
   // To write dataset independently use
-  //    H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_INDEPENDENT); 
+  //    H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_INDEPENDENT);
     
   herr_t      status;
   status = H5Dwrite(dataset_id, H5T_IEEE_F64LE, mem_dataspace_id, file_dataspace_id,
@@ -204,9 +205,9 @@ bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_na
   offset[0] = displs;
   hid_t mem_dataspace_id = H5Screate_simple(ndims, count, NULL);
 
-  /*  
+  /*
    * Select hyperslab in the file.
-   */  
+   */
   hid_t file_dataspace_id = H5Dget_space(dataset_id);
   H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
 
@@ -226,103 +227,138 @@ bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_na
 }
 
 int main(int argc, char** argv) {
-
-    MPI_Init(&argc, &argv);
-
-    int world_size, rank, new_world_size, new_rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
-    MPI_Comm new_comm;
-    int new_color = rank / RANKS_PER_FILE;
-    int nb_new_comms = world_size / RANKS_PER_FILE;
-    MPI_Comm_split(MPI_COMM_WORLD, new_color, rank, &new_comm);
-
-    MPI_Comm mpi_hdf5_comm  = new_comm;
-    
-    MPI_Comm_size(new_comm, &new_world_size);
-    MPI_Comm_rank(new_comm, &new_rank);
-
-    hid_t hdf5_file_id = -1;
-    bool return_val = false;
-
-    // initialize HDF5 library
-    // this is only really required for the Fortran interface
-    return_val = H5open();
-    assert(return_val == 0);
-
-    // create hdf5 file
-    if (rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
-
-    std::string file_name = "checkpoint_" + std::to_string(new_color);
-    return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
-    assert(return_val == true);
-
-    return_val = create_hdf5_dataset(hdf5_file_id, "test_dataset", BUFFER_SIZE/nb_new_comms, mpi_hdf5_comm);
-    assert(return_val == true);
-
-    return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
-    assert(return_val == true);
-
-
-    int begin = BUFFER_SIZE/nb_new_comms * (new_rank    ) / new_world_size;
-    int end   = BUFFER_SIZE/nb_new_comms * (new_rank + 1) / new_world_size;
-    int nsize = end - begin;
-
-    int nsize_global[new_world_size];
-    int iret = MPI_Allgather(&nsize, 1, MPI_INT, nsize_global, 1, MPI_INT, new_comm);
-
-    int displs[new_world_size];
-    displs[0] = 0;
-    for (int i = 1; i < new_world_size; i++){
-       displs[i] = displs[i-1] + nsize_global[i-1];
-    }   
-
-    // Initialize data buffer 
-    double *buffer_checkpoint = NULL;
-    buffer_checkpoint = (double*)malloc(sizeof(double) * nsize);
-    assert(buffer_checkpoint != NULL);
-
-    double *buffer_recover = NULL;
-    buffer_recover = (double*)malloc(sizeof(double) * nsize);
-    assert(buffer_recover != NULL);
-
-    for (long i = 0; i < nsize; i++) {
-      buffer_checkpoint[i] = 1.0 + (double)i + nsize*rank;
-      buffer_recover[i] = 0.0;
+  
+  RANKS_PER_FILE = 4;
+  BUFFER_SIZE = 400;
+  int nb_files = 1;
+  
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "-size")) {
+      BUFFER_SIZE = atoi(argv[++i]);
     }
-
-    // checkpoint
-    if (rank == 0) std::cout << "Writing checkpoint" << std::endl;
-    return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
-    assert(return_val == true);
-    return_val = write_data_to_hdf5(hdf5_file_id, "test_dataset", buffer_checkpoint, nsize, displs[new_rank], mpi_hdf5_comm);
-    assert(return_val == true);
-    return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
-    assert(return_val == true);
-
-    // recover
-    if (rank == 0) std::cout << "Recovering  checkpoint" << std::endl;
-    return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
-    assert(return_val == true);
-    return_val = read_data_from_hdf5(hdf5_file_id, "test_dataset", buffer_recover, nsize, displs[new_rank], mpi_hdf5_comm);
-    assert(return_val == true);
-    return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
-    assert(return_val == true);
-
-    if (rank == 0) std::cout << "Verifying  checkpoint" << std::endl;
-    int ierr = 0;
-    // verification
-    for (long i = 0; i < nsize; i++) {
-      assert(buffer_checkpoint[i] == buffer_recover[i]);
-      if (buffer_checkpoint[i] != buffer_recover[i]) ierr++;
+    
+    if (!strcmp(argv[i], "-nb_files")) {
+      nb_files = atoi(argv[++i]);
     }
-    int ierr_global = 0;
-    MPI_Allreduce(&ierr, &ierr_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-    if (rank == 0 && ierr_global == 0) std::cout << "Checkpoint has been verified" << std::endl;
+  }
 
-    free(buffer_checkpoint);
-    free(buffer_recover);
+  MPI_Init(&argc, &argv);
 
-    MPI_Finalize();
+  int world_size, rank, new_world_size, new_rank;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  
+  assert(BUFFER_SIZE % world_size == 0);
+  assert(world_size % nb_files == 0);
+  RANKS_PER_FILE = world_size / nb_files;
+
+  MPI_Comm new_comm;
+  int new_color = rank / RANKS_PER_FILE;
+  int nb_new_comms = world_size / RANKS_PER_FILE;
+  MPI_Comm_split(MPI_COMM_WORLD, new_color, rank, &new_comm);
+
+  MPI_Comm mpi_hdf5_comm  = new_comm;
+
+  MPI_Comm_size(new_comm, &new_world_size);
+  MPI_Comm_rank(new_comm, &new_rank);
+
+  hid_t hdf5_file_id = -1;
+  bool return_val = false;
+
+  // initialize HDF5 library
+  // this is only really required for the Fortran interface
+  return_val = H5open();
+  assert(return_val == 0);
+
+  // create hdf5 file
+  if (rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
+
+  std::string file_name = "checkpoint_" + std::to_string(new_color);
+  return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
+  assert(return_val == true);
+
+  return_val = create_hdf5_dataset(hdf5_file_id, "test_dataset", BUFFER_SIZE/nb_new_comms, mpi_hdf5_comm);
+  assert(return_val == true);
+
+  return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
+  assert(return_val == true);
+
+#if 0
+  int begin = BUFFER_SIZE/nb_new_comms * (new_rank    ) / new_world_size;
+  int end   = BUFFER_SIZE/nb_new_comms * (new_rank + 1) / new_world_size;
+  int nsize = end - begin;
+
+  int nsize_global[new_world_size];
+  int iret = MPI_Allgather(&nsize, 1, MPI_INT, nsize_global, 1, MPI_INT, new_comm);
+
+  int displs[new_world_size];
+  displs[0] = 0;
+  for (int i = 1; i < new_world_size; i++){
+     displs[i] = displs[i-1] + nsize_global[i-1];
+  }
+#else
+  int nsize = BUFFER_SIZE/world_size;
+  int displs[new_world_size];
+  displs[new_rank] = nsize * new_rank;
+#endif
+
+  // Initialize data buffer
+  double *buffer_checkpoint = NULL;
+  buffer_checkpoint = (double*)malloc(sizeof(double) * nsize);
+  assert(buffer_checkpoint != NULL);
+
+  double *buffer_recover = NULL;
+  buffer_recover = (double*)malloc(sizeof(double) * nsize);
+  assert(buffer_recover != NULL);
+
+  for (long i = 0; i < nsize; i++) {
+    buffer_checkpoint[i] = 1.0 + (double)i + nsize*rank;
+    buffer_recover[i] = 0.0;
+  }
+  
+  double t1, t2;
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (rank == 0) {
+    t1 = MPI_Wtime();
+  }
+
+  // checkpoint
+  if (rank == 0) std::cout << "Writing checkpoint" << std::endl;
+  return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
+  assert(return_val == true);
+  return_val = write_data_to_hdf5(hdf5_file_id, "test_dataset", buffer_checkpoint, nsize, displs[new_rank], mpi_hdf5_comm);
+  assert(return_val == true);
+  return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
+  assert(return_val == true);
+
+  // recover
+  if (rank == 0) std::cout << "Recovering  checkpoint" << std::endl;
+  return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
+  assert(return_val == true);
+  return_val = read_data_from_hdf5(hdf5_file_id, "test_dataset", buffer_recover, nsize, displs[new_rank], mpi_hdf5_comm);
+  assert(return_val == true);
+  return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
+  assert(return_val == true);
+  
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (rank == 0) {
+    t2 = MPI_Wtime();
+    printf( "Elapsed time is %f\n", t2 - t1 );
+  }
+
+  if (rank == 0) std::cout << "Verifying  checkpoint" << std::endl;
+  int ierr = 0;
+  // verification
+  for (long i = 0; i < nsize; i++) {
+    assert(buffer_checkpoint[i] == buffer_recover[i]);
+    if (buffer_checkpoint[i] != buffer_recover[i]) ierr++;
+  }
+  int ierr_global = 0;
+  MPI_Allreduce(&ierr, &ierr_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  if (rank == 0 && ierr_global == 0) std::cout << "Checkpoint has been verified" << std::endl;
+
+  free(buffer_checkpoint);
+  free(buffer_recover);
+
+  MPI_Finalize();
 }
