@@ -1,5 +1,4 @@
 #!/bin/sh
-data_sizes="100 400 800 1600"
 
 #set -v
 
@@ -9,9 +8,16 @@ spack install hdf5+mpi+cxx
 # Load the hdf5 module
 spack load -r hdf5
 
+# Compile the code
+make
+
 # Run the proxy with arguments for data size and number of files
-for dsize in $data_sizes
+dsize=$(( 10**6 ))
+for ((inc=0; i<18; i++))
 do
+   runstring="mpirun -n 64 ./hdf5proxy -size $dsize -nb_files 4"
+   echo $runstring
    echo -n "Data size is $dsize "
-   ./hdf5proxy -size $dsize -nb_files 1 |grep 'Elapsed time'
+   eval "$runstring  |grep 'Elapsed time'"
+   dsize=$(( $dsize*2 ))
 done

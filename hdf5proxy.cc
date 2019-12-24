@@ -6,7 +6,7 @@
 #include <cstring>
 
 int RANKS_PER_FILE;
-int BUFFER_SIZE; // number of elements in double
+long BUFFER_SIZE; // number of elements in double
 
 bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm)
 {
@@ -100,7 +100,7 @@ bool close_hdf5_file(hid_t &hdf5_file_id, MPI_Comm mpi_hdf5_comm) {
   return true;
 }
 
-bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_name, int buffer_size, MPI_Comm mpi_hdf5_comm)
+bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_name, long long buffer_size, MPI_Comm mpi_hdf5_comm)
 {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
@@ -143,7 +143,7 @@ bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_nam
   return true;
 }
 
-bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, const double *buffer, int nsize, int displs, MPI_Comm mpi_hdf5_comm) {
+bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, const double *buffer, long long nsize, long long displs, MPI_Comm mpi_hdf5_comm) {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
@@ -186,7 +186,7 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
   return true;
 }
 
-bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, double *buffer, int nsize, int displs, MPI_Comm mpi_hdf5_comm) {
+bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, double *buffer, long long nsize, long long displs, MPI_Comm mpi_hdf5_comm) {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
   
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "-size")) {
-      BUFFER_SIZE = atoi(argv[++i]);
+      BUFFER_SIZE = atol(argv[++i]);
     }
     
     if (!strcmp(argv[i], "-nb_files")) {
@@ -284,21 +284,21 @@ int main(int argc, char** argv) {
   assert(return_val == true);
 
 #if 0
-  int begin = BUFFER_SIZE/nb_new_comms * (new_rank    ) / new_world_size;
-  int end   = BUFFER_SIZE/nb_new_comms * (new_rank + 1) / new_world_size;
-  int nsize = end - begin;
+  long long begin = BUFFER_SIZE/nb_new_comms * (new_rank    ) / new_world_size;
+  long long end   = BUFFER_SIZE/nb_new_comms * (new_rank + 1) / new_world_size;
+  long long nsize = end - begin;
 
-  int nsize_global[new_world_size];
+  long long nsize_global[new_world_size];
   int iret = MPI_Allgather(&nsize, 1, MPI_INT, nsize_global, 1, MPI_INT, new_comm);
 
-  int displs[new_world_size];
+  long long displs[new_world_size];
   displs[0] = 0;
   for (int i = 1; i < new_world_size; i++){
      displs[i] = displs[i-1] + nsize_global[i-1];
   }
 #else
-  int nsize = BUFFER_SIZE/world_size;
-  int displs[new_world_size];
+  long long nsize = BUFFER_SIZE/world_size;
+  long long displs[new_world_size];
   displs[new_rank] = nsize * new_rank;
 #endif
 
@@ -349,7 +349,7 @@ int main(int argc, char** argv) {
   if (rank == 0) std::cout << "Verifying  checkpoint" << std::endl;
   int ierr = 0;
   // verification
-  for (long i = 0; i < nsize; i++) {
+  for (long long i = 0; i < nsize; i++) {
     assert(buffer_checkpoint[i] == buffer_recover[i]);
     if (buffer_checkpoint[i] != buffer_recover[i]) ierr++;
   }
