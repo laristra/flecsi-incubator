@@ -2,7 +2,10 @@
 #SBATCH -N 8
 #SBATCH -J hdf5test
 
-cd /lustre/ttscratch1/brobey
+SCRATCH_DIR=/lustre/ttscratch1/brobey
+
+mkdir ${SCRATCH_DIR}/hdf5proxy
+cd ${SCRATCH_DIR}/hdf5proxy
 dsize=$(( 10**9 ))
 #for ((inc=0; i<7; i++))
 for ((nodes=1; nodes<8; nodes++))
@@ -14,3 +17,4 @@ do
    #dsize=$(( $dsize*2 ))
 done
 
+rm -rf ${SCRATCH_DIR}/hdf5proxy
