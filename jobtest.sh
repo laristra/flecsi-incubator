@@ -2,6 +2,8 @@
 #SBATCH -N 8
 #SBATCH -J hdf5test
 
+set -e
+
 SCRATCH_DIR=/lustre/ttscratch1/brobey
 
 mkdir ${SCRATCH_DIR}/hdf5proxy

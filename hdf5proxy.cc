@@ -16,6 +16,8 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
   hid_t file_creation_plist_id = H5P_DEFAULT;   // File creation property list
   hid_t file_access_plist_id   = H5P_DEFAULT;   // File access property list
   MPI_Info mpi_info  = MPI_INFO_NULL; // For MPI IO hints
+  MPI_Info_create(&mpi_info);
+  MPI_Info_set(mpi_info, "striping_factor", "8" );
 
   // Set up file access property list with parallel I/O access
   // H5Pcreate is a general property list create function
