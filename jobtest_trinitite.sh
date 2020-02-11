@@ -10,9 +10,15 @@ set -e
 
 # 1/4 of memory fails allocation -- changing to 1/32
 
+module swap craype-haswell craype-mic-knl
+module load cray-hdf5-parallel/1.10.5.2
+module load cmake/3.16.2
+
+module list
+
 SCRATCH_DIR=/lustre/ttscratch1/brobey
 EXEC=/users/brobey/hdf5proxy/hdf5proxy
-MEM_FRACTION=1/32
+MEM_FRACTION=1/40
 
 rm -rf ${SCRATCH_DIR}/hdf5proxy
 mkdir ${SCRATCH_DIR}/hdf5proxy
@@ -41,9 +47,10 @@ do
       echo "#SBATCH --ntasks-per-node=${ranks_per_node}" >> $BATCH_JOB
       echo "#SBATCH -t 4:00:00"                          >> $BATCH_JOB
       echo "#SBATCH -J hdf$nodes_$ranks_per_node"        >> $BATCH_JOB
+      echo "#SBATCH -p knl"                              >> $BATCH_JOB
       echo "SCRATCH_DIR=/lustre/ttscratch1/brobey"       >> $BATCH_JOB
       echo "EXEC=/users/brobey/hdf5proxy/hdf5proxy"      >> $BATCH_JOB
-      echo "MEM_FRACTION=1/32"                           >> $BATCH_JOB
+      echo "MEM_FRACTION=1/40"                           >> $BATCH_JOB
       echo "cd ${SCRATCH_DIR}/hdf5proxy"                 >> $BATCH_JOB
       echo "mkdir run${nodes}_${ranks_per_node}"         >> $BATCH_JOB
       echo "cd run${nodes}_${ranks_per_node}"            >> $BATCH_JOB
