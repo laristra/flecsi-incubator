@@ -6,7 +6,7 @@
 #include <cstring>
 
 int RANKS_PER_FILE;
-long BUFFER_SIZE; // number of elements in double
+//long BUFFER_SIZE; // number of elements in double
 
 bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm)
 {
@@ -102,19 +102,20 @@ bool close_hdf5_file(hid_t &hdf5_file_id, MPI_Comm mpi_hdf5_comm) {
   return true;
 }
 
-bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_name, long long buffer_size, MPI_Comm mpi_hdf5_comm)
+bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_name, long ncount, MPI_Comm mpi_hdf5_comm)
 {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
   const int ndims = 1;
   hsize_t dims[ndims];
-  dims[0] = buffer_size;
+  dims[0] = ncount;
 
   // 1st argument -- number of dimensions
   // 2nd argument -- array of current dimensions
   // 3rd argument -- maximum number of dimensions. NULL means that current is maximum
   // returns the dataspace id. Fortran interface has this inserted as arg 3 and arg 4 as err(max moves to arg 5).
+  std::cout << "creating dataset with dim " << ncount << std::endl;
   hid_t file_dataspace_id = H5Screate_simple(ndims, dims, NULL);
 
   // Creates a new dataset and links to file
@@ -145,7 +146,7 @@ bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_nam
   return true;
 }
 
-bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, const double *buffer, long long nsize, long long displs, MPI_Comm mpi_hdf5_comm) {
+bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, const double *buffer, long ncount, long displs, MPI_Comm mpi_hdf5_comm) {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
@@ -160,7 +161,7 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
   const int ndims = 1;
   hsize_t count[1];
   hsize_t offset[1];
-  count[0] = nsize;
+  count[0] = ncount;
   offset[0] = displs;
   hid_t mem_dataspace_id = H5Screate_simple(ndims, count, NULL);
 
@@ -168,6 +169,7 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
    * Select hyperslab in the file.
    */
   hid_t file_dataspace_id = H5Dget_space(dataset_id);
+  std::cout << "Rank: "<< rank << " offset: " << displs << " count: " << ncount << std::endl;
   H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
 
   // Create property list for collective dataset write.
@@ -188,7 +190,7 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
   return true;
 }
 
-bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, double *buffer, long long nsize, long long displs, MPI_Comm mpi_hdf5_comm) {
+bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, double *buffer, long ncount, long displs, MPI_Comm mpi_hdf5_comm) {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
@@ -203,7 +205,7 @@ bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_na
   const int ndims = 1;
   hsize_t count[1];
   hsize_t offset[1];
-  count[0] = nsize;
+  count[0] = ncount;
   offset[0] = displs;
   hid_t mem_dataspace_id = H5Screate_simple(ndims, count, NULL);
 
@@ -231,7 +233,7 @@ bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_na
 int main(int argc, char** argv) {
   
   RANKS_PER_FILE = 4;
-  BUFFER_SIZE = 400;
+  long BUFFER_SIZE = 400;
   int nb_files = 1;
   
   for (int i = 1; i < argc; i++) {
@@ -249,7 +251,11 @@ int main(int argc, char** argv) {
   int world_size, rank, new_world_size, new_rank;
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  
+
+  BUFFER_SIZE = (BUFFER_SIZE / world_size) * world_size;
+  nb_files = world_size / (world_size / nb_files);
+  std::cout << "BUFFER_SIZE: " << BUFFER_SIZE << std::endl;
+  std::cout << "#Files: " << nb_files << std::endl;
   assert(BUFFER_SIZE % world_size == 0);
   assert(world_size % nb_files == 0);
   RANKS_PER_FILE = world_size / nb_files;
@@ -279,11 +285,6 @@ int main(int argc, char** argv) {
   return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
   assert(return_val == true);
 
-  return_val = create_hdf5_dataset(hdf5_file_id, "test_dataset", BUFFER_SIZE/nb_new_comms, mpi_hdf5_comm);
-  assert(return_val == true);
-
-  return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
-  assert(return_val == true);
 
 #if 0
   long long begin = BUFFER_SIZE/nb_new_comms * (new_rank    ) / new_world_size;
@@ -299,11 +300,18 @@ int main(int argc, char** argv) {
      displs[i] = displs[i-1] + nsize_global[i-1];
   }
 #else
-  long long nsize = BUFFER_SIZE/world_size;
-  long long ncount = nsize / sizeof(double); 
-  long long displs[new_world_size];
-  displs[new_rank] = nsize * new_rank;
+  long nsize = BUFFER_SIZE/world_size;
+  long ncount = nsize / sizeof(double); 
+  long displs[new_world_size];
+  displs[new_rank] = ncount * new_rank;
 #endif
+  std::cout << " hello! " << std::endl;
+  std::cout << "create dataset " << ncount << " " << nb_new_comms << std::endl;
+  return_val = create_hdf5_dataset(hdf5_file_id, "test_dataset", ncount/nb_new_comms*world_size, mpi_hdf5_comm);
+  assert(return_val == true);
+
+  return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
+  assert(return_val == true);
 
   // Initialize data buffer
   double *buffer_checkpoint = NULL;
@@ -352,7 +360,7 @@ int main(int argc, char** argv) {
   if (rank == 0) std::cout << "Verifying  checkpoint" << std::endl;
   int ierr = 0;
   // verification
-  for (long long i = 0; i < ncount; i++) {
+  for (long i = 0; i < ncount; i++) {
     assert(buffer_checkpoint[i] == buffer_recover[i]);
     if (buffer_checkpoint[i] != buffer_recover[i]) ierr++;
   }

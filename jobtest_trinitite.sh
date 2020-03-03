@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 # Design parameters
@@ -18,17 +18,17 @@ module list
 
 SCRATCH_DIR=/lustre/ttscratch1/gshipman
 EXEC=/usr/projects/eap/users/gshipman/hdf5proxy/hdf5proxy
-MEM_FRACTION=1/40
+MEM_FRACTION=1/4
 
 rm -rf ${SCRATCH_DIR}/hdf5proxy
 mkdir ${SCRATCH_DIR}/hdf5proxy
 cd ${SCRATCH_DIR}/hdf5proxy
 
 echo "Memory per node is 96 GB. Writing out ${MEM_FRACTION} of node memory"
-for ranks_per_node in 32 #64
+for ranks_per_node in 32 64
 do
    echo ""
-   for nodes in 1 #16 32 64 96
+   for nodes in 1 16 32 64 96
    do
       dsizeGB=$(( nodes*96*${MEM_FRACTION} ))
       dsize=$(( nodes*96* 1024 * 1024 * 1024 *${MEM_FRACTION} ))
@@ -46,7 +46,7 @@ do
       echo "#SBATCH -N $nodes"                           >> $BATCH_JOB
       echo "#SBATCH --ntasks=${ranks}"                   >> $BATCH_JOB
       echo "#SBATCH --ntasks-per-node=${ranks_per_node}" >> $BATCH_JOB
-      echo "#SBATCH -t 4:00:00"                          >> $BATCH_JOB
+      echo "#SBATCH -t 1:00:00"                          >> $BATCH_JOB
       echo "#SBATCH -J hdf$nodes_$ranks_per_node"        >> $BATCH_JOB
       echo "#SBATCH -p knl"                              >> $BATCH_JOB
       echo "SCRATCH_DIR=${SCRATCH_DIR}"       >> $BATCH_JOB
