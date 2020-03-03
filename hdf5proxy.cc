@@ -300,21 +300,22 @@ int main(int argc, char** argv) {
   }
 #else
   long long nsize = BUFFER_SIZE/world_size;
+  long long ncount = nsize / sizeof(double); 
   long long displs[new_world_size];
   displs[new_rank] = nsize * new_rank;
 #endif
 
   // Initialize data buffer
   double *buffer_checkpoint = NULL;
-  buffer_checkpoint = (double*)malloc(sizeof(double) * nsize);
+  buffer_checkpoint = (double*)malloc(nsize);
   assert(buffer_checkpoint != NULL);
 
   double *buffer_recover = NULL;
-  buffer_recover = (double*)malloc(sizeof(double) * nsize);
+  buffer_recover = (double*)malloc(nsize);
   assert(buffer_recover != NULL);
 
-  for (long i = 0; i < nsize; i++) {
-    buffer_checkpoint[i] = 1.0 + (double)i + nsize*rank;
+  for (long i = 0; i < ncount; i++) {
+    buffer_checkpoint[i] = 1.0 + (double)i + ncount*rank;
     buffer_recover[i] = 0.0;
   }
   
@@ -328,7 +329,7 @@ int main(int argc, char** argv) {
   if (rank == 0) std::cout << "Writing checkpoint" << std::endl;
   return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
   assert(return_val == true);
-  return_val = write_data_to_hdf5(hdf5_file_id, "test_dataset", buffer_checkpoint, nsize, displs[new_rank], mpi_hdf5_comm);
+  return_val = write_data_to_hdf5(hdf5_file_id, "test_dataset", buffer_checkpoint, ncount, displs[new_rank], mpi_hdf5_comm);
   assert(return_val == true);
   return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
   assert(return_val == true);
@@ -337,7 +338,7 @@ int main(int argc, char** argv) {
   if (rank == 0) std::cout << "Recovering  checkpoint" << std::endl;
   return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
   assert(return_val == true);
-  return_val = read_data_from_hdf5(hdf5_file_id, "test_dataset", buffer_recover, nsize, displs[new_rank], mpi_hdf5_comm);
+  return_val = read_data_from_hdf5(hdf5_file_id, "test_dataset", buffer_recover, ncount, displs[new_rank], mpi_hdf5_comm);
   assert(return_val == true);
   return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
   assert(return_val == true);
@@ -351,7 +352,7 @@ int main(int argc, char** argv) {
   if (rank == 0) std::cout << "Verifying  checkpoint" << std::endl;
   int ierr = 0;
   // verification
-  for (long long i = 0; i < nsize; i++) {
+  for (long long i = 0; i < ncount; i++) {
     assert(buffer_checkpoint[i] == buffer_recover[i]);
     if (buffer_checkpoint[i] != buffer_recover[i]) ierr++;
   }
