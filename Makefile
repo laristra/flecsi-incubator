@@ -4,7 +4,7 @@ default: $(BIN)
 
 H5C++ ?= h5c++
 
-CXXFLAGS += -std=c++11 -g -O3
+CXXFLAGS += -std=c++11 -g -O0
 
 $(BIN): %:%.cc
 		$(H5C++) -o $@ $(CXXFLAGS) $< $(LDFLAGS)

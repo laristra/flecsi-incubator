@@ -56,8 +56,8 @@ do
       echo "mkdir run${nodes}_${ranks_per_node}"         >> $BATCH_JOB
       echo "cd run${nodes}_${ranks_per_node}"            >> $BATCH_JOB
       #echo runstring="srun -N $nodes --ntasks-per-node $ranks_per_node ${EXEC} -size $dsize -nb_files $nfiles" >> $BATCH_JOB
-      echo "echo \"$runstring  |grep 'Elapsed time'\" "  >> $BATCH_JOB
-      echo "$runstring  |grep 'Elapsed time'"            >> $BATCH_JOB
+      echo "echo \"$runstring \" "  >> $BATCH_JOB
+      echo "$runstring  "            >> $BATCH_JOB
       echo $BATCH_JOB
       echo "==============="
       cat $BATCH_JOB
