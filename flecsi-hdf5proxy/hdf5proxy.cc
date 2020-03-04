@@ -18,6 +18,10 @@
 #include <iostream>
 #include <cstring>
 
+#ifndef DEBUG
+#define DEBUG 0
+#endif
+
 int RANKS_PER_FILE;
 //long BUFFER_SIZE; // number of elements in double
 
@@ -128,7 +132,7 @@ bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_nam
   // 2nd argument -- array of current dimensions
   // 3rd argument -- maximum number of dimensions. NULL means that current is maximum
   // returns the dataspace id. Fortran interface has this inserted as arg 3 and arg 4 as err(max moves to arg 5).
-  std::cout << "creating dataset with dim " << ncount << std::endl;
+  if (DEBUG  && rank == 0) std::cout << "creating dataset with dim " << ncount << std::endl;
   hid_t file_dataspace_id = H5Screate_simple(ndims, dims, NULL);
 
   // Creates a new dataset and links to file
@@ -182,7 +186,7 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
    * Select hyperslab in the file.
    */
   hid_t file_dataspace_id = H5Dget_space(dataset_id);
-  std::cout << "Rank: "<< rank << " offset: " << displs << " count: " << ncount << std::endl;
+  if (DEBUG && rank == 0) std::cout << "Rank: "<< rank << " offset: " << displs << " count: " << ncount << std::endl;
   H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
 
   // Create property list for collective dataset write.
@@ -267,8 +271,8 @@ int main(int argc, char** argv) {
 
   BUFFER_SIZE = (BUFFER_SIZE / world_size) * world_size;
   nb_files = world_size / (world_size / nb_files);
-  std::cout << "BUFFER_SIZE: " << BUFFER_SIZE << std::endl;
-  std::cout << "#Files: " << nb_files << std::endl;
+  if (DEBUG && rank == 0) std::cout << "BUFFER_SIZE: " << BUFFER_SIZE << std::endl;
+  if (DEBUG && rank == 0) std::cout << "#Files: " << nb_files << std::endl;
   assert(BUFFER_SIZE % world_size == 0);
   assert(world_size % nb_files == 0);
   RANKS_PER_FILE = world_size / nb_files;
@@ -292,7 +296,7 @@ int main(int argc, char** argv) {
   assert(return_val == 0);
 
   // create hdf5 file
-  if (rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
+  if (DEBUG && rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
 
   std::string file_name = "checkpoint_" + std::to_string(new_color);
   return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
@@ -318,8 +322,8 @@ int main(int argc, char** argv) {
   long displs[new_world_size];
   displs[new_rank] = ncount * new_rank;
 #endif
-  std::cout << " hello! " << std::endl;
-  std::cout << "create dataset " << ncount << " " << nb_new_comms << std::endl;
+  //if (rank == 0) std::cout << " hello! " << std::endl;
+  if (DEBUG && rank == 0) std::cout << "create dataset " << ncount << " " << nb_new_comms << std::endl;
   return_val = create_hdf5_dataset(hdf5_file_id, "test_dataset", ncount/nb_new_comms*world_size, mpi_hdf5_comm);
   assert(return_val == true);
 
