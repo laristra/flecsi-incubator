@@ -38,9 +38,11 @@ do
    do
       dsizeGB=`echo "scale=2; ${nodes}*96*${MEM_FRACTION}" | bc -l`
       dsize=$(( nodes*96* 1024 * 1024 * 1024 *${MEM_FRACTION} ))
-      nfiles=$(( nodes/16 ))
+      nfiles=$(( (nodes+15)/16 ))
+      size_per_file=$(( ${dsize}/${nfiles} ))
       ranks=$(( ${ranks_per_node}*${nodes} ))
       if [ ${nfiles} -eq 0 ]; then  nfiles=1; fi
+      printf "%-38s\n" "Total size in bytes is $dsize GiB Number of nodes is $nodes size per file $size_per_file"
       printf "%-38s" "Data size is $dsizeGB GiB Nodes is $nodes "
       runstring="srun -N $nodes --ntasks-per-node $ranks_per_node ${EXEC} -size $dsize -nb_files $nfiles"
       echo $runstring

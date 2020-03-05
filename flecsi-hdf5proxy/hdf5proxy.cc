@@ -56,9 +56,9 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
     std::cout << " H5Fcreate failed: " << hdf5_file_id << std::endl;
     return false;
   }
-  if (rank == 0){
+  if (DEBUG && rank == 0){
     std::cout << " create HDF5 file " << file_name
-              << " file_id " << hdf5_file_id
+              //<< " file_id " << hdf5_file_id
               << std::endl;
   }
 
@@ -90,12 +90,14 @@ bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm 
   assert(hdf5_file_id == -1);
   hdf5_file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDWR, file_access_plist_id);
   if(hdf5_file_id < 0 && rank == 0) {
-    std::cout << " H5Fopen failed: " << hdf5_file_id << std::endl;
+    std::cout << " H5Fopen failed: "
+              //<< hdf5_file_id
+              << std::endl;
     return false;
   }
-  if (rank == 0){
+  if (DEBUG && rank == 0){
      std::cout << " open HDF5 file " << file_name
-               << " file_id " << hdf5_file_id
+               //<< " file_id " << hdf5_file_id
                << std::endl;
   }
   return true;
@@ -111,7 +113,7 @@ bool close_hdf5_file(hid_t &hdf5_file_id, MPI_Comm mpi_hdf5_comm) {
   assert(status == 0);
   status = H5Fclose(hdf5_file_id);
   assert(status == 0);
-  if (rank == 0){
+  if (DEBUG && rank == 0){
      std::cout << " close HDF5 file_id " << hdf5_file_id
                << std::endl;
   }
@@ -343,8 +345,8 @@ int main(int argc, char** argv) {
     buffer_checkpoint[i] = 1.0 + (double)i + ncount*rank;
     buffer_recover[i] = 0.0;
   }
-  
-  double t1, t2;
+
+  double t1, t2, t3;
   MPI_Barrier(MPI_COMM_WORLD);
   if (rank == 0) {
     t1 = MPI_Wtime();
@@ -359,6 +361,15 @@ int main(int argc, char** argv) {
   return_val = close_hdf5_file(hdf5_file_id, mpi_hdf5_comm);
   assert(return_val == true);
 
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (rank == 0) {
+    t2 = MPI_Wtime();
+    std::cout << "Time to write checkpoint is " << t2 - t1 << " secs. "
+              << "Bytes written " << BUFFER_SIZE << " bytes per file. "
+              << "Write rate is " << BUFFER_SIZE/1024.0/1024.0/(t2 - t1) << " MiBs/sec per file" 
+              << std::endl;
+  }
+
   // recover
   if (rank == 0) std::cout << "Recovering  checkpoint" << std::endl;
   return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
@@ -370,8 +381,16 @@ int main(int argc, char** argv) {
   
   MPI_Barrier(MPI_COMM_WORLD);
   if (rank == 0) {
-    t2 = MPI_Wtime();
-    printf( "Elapsed time is %f\n", t2 - t1 );
+    t3 = MPI_Wtime();
+    std::cout << "Time to recover checkpoint is " << t3 - t2 << " secs. "
+              << "Bytes read " << BUFFER_SIZE << " bytes per file. "
+              << "Read rate is " << BUFFER_SIZE/1024.0/1024.0/(t3 - t2) << " MiBs/sec per file"
+              << std::endl;
+  }
+
+  if (rank == 0) {
+    t3 = MPI_Wtime();
+    std::cout << "Elapsed time is " << t3 - t1 << std::endl;
   }
 
   if (rank == 0) std::cout << "Verifying  checkpoint" << std::endl;
