@@ -8,8 +8,6 @@ set -e
 # Writing out 25% of memory per node
 # Using striping factor of 8 -- see mpi_info setting in hdf5proxy 
 
-# 1/4 of memory fails allocation -- changing to 1/32
-
 module swap craype-haswell craype-mic-knl
 module load cray-hdf5-parallel/1.10.5.2
 module load cmake/3.16.2
@@ -51,7 +49,7 @@ do
       echo "#SBATCH -N $nodes"                           >> $BATCH_JOB
       echo "#SBATCH --ntasks=${ranks}"                   >> $BATCH_JOB
       echo "#SBATCH --ntasks-per-node=${ranks_per_node}" >> $BATCH_JOB
-      echo "#SBATCH -t 1:00:00"                          >> $BATCH_JOB
+      echo "#SBATCH -t 2:00:00"                          >> $BATCH_JOB
       echo "#SBATCH -J hdf$nodes_$ranks_per_node"        >> $BATCH_JOB
       echo "#SBATCH -p knl"                              >> $BATCH_JOB
       echo "SCRATCH_DIR=${SCRATCH_DIR}"                  >> $BATCH_JOB
