@@ -38,19 +38,19 @@ for file in glob.glob(FILE_PATH):
            dbandwidth_in = words[16]
            if re.match('32',words_save[4]):
               if re.match('Read',words[13]):
-                 read32_dsize.append(float(dsize_in)*1024.0/1024.0)
+                 read32_dsize.append(float(dsize_in)/1024.0/1024.0/1024.0)
                  read32_dbandwidth.append(float(dbandwidth_in))
                  print ""
               if re.match('Write',words[13]):
-                 write32_dsize.append(float(dsize_in)*1024.0/1024.0)
+                 write32_dsize.append(float(dsize_in)/1024.0/1024.0/1024.0)
                  write32_dbandwidth.append(float(dbandwidth_in))
            if re.match('64',words_save[4]):
               if re.match('Read',words[13]):
-                 read64_dsize.append(float(dsize_in)*1024.0/1024.0)
+                 read64_dsize.append(float(dsize_in)/1024.0/1024.0/1024.0)
                  read64_dbandwidth.append(float(dbandwidth_in))
                  print ""
               if re.match('Write',words[13]):
-                 write64_dsize.append(float(dsize_in)*1024.0/1024.0)
+                 write64_dsize.append(float(dsize_in)/1024.0/1024.0/1024.0)
                  write64_dbandwidth.append(float(dbandwidth_in))
         
 read32_dsize, read32_dbandwidth = zip(*sorted(zip(read32_dsize, read32_dbandwidth)))
@@ -68,7 +68,7 @@ plt.plot(write64_dsize, write64_dbandwidth, "x", linestyle='--', label="write64"
 
 ax.grid()
 
-plt.xlabel('Data Size (MB)',fontsize=16)
+plt.xlabel('Data Size (GB)',fontsize=16)
 plt.ylabel('Bandwidth (MB/sec)',fontsize=16)
 plt.legend(loc="upper left")
 
