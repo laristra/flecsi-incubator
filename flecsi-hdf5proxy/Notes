@@ -1,0 +1,73 @@
+HDF5Proxy test problem
+ 
+This test problem writes out 1/4 of the 96 GB memory of the KNL node or 24 GB. There is both a write and a read buffer, so the problem uses half the memory of the node. The tests that are run are on 1, 16, 32, 64, and 96 nodes and uses 32 or 64 ranks on each node. The number of files that are written are files = nodes/16 and 1 file on the single node case. 
+ 
+The first data point is somewhat of an anomaly and the rest are sort of a weak scaling of the data output. The file is opened and the disk space is allocated. Then the data set is written out as a checkpoint and the time measured. Then it is read back in and the time for the read is measured. The plotting script grabs the data from the output and plots it.
+ 
+There is just one MPI hint that is set for a striping factor of 8. Trinitite only has 4 OSTs, so on that system it ends up using 4. The stripe size is 1 MB. 
+ 
+For all but the first case, the file sizes are 385GiB.
+ 
+Plot 1 is for the original settings.
+ 
+Wei-keng made the following suggestions. Plot 2 is the performance with these settings. Performance is maybe slightly better.
+ 
+If you are doing only collective I/O, consider adding the two followings.
+Note HDF5 default for metadata is independent mode.
+ 
+    /* set collective mode for metadata reads */
+    H5Pset_all_coll_metadata_ops(fapl_id, true);
+ 
+    /* set collective mode for metadata writes */
+    H5Pset_coll_metadata_write(fapl_id, true);
+ 
+Brad suggested changing the write size to 4 MB. The third plot is with the size increased from 1 MB to 4 MB. The write bandwidth is slightly better, but the read is nearly twice as fast.
+ 
+Bob
+
+Wei-king says there is a problem in the Cray HDF that causes problems with reads.
+
+Suggestions from Galen to flush IO cache
+
+#define _XOPEN_SOURCE 600
+#include <unistd.h>
+#include <fcntl.h>
+int main(int argc, char *argv[]) {
+    int fd;
+    fd = open(argv[1], O_RDONLY);
+    fdatasync(fd);
+    posix_fadvise(fd, 0,0,POSIX_FADV_DONTNEED);
+    close(fd);
+    return 0;
+}
+
+Hi, Bob and Galen
+
+With helps from Phil and Rob, I found from observing Darshan logs
+that Cray’s MPI always run “two-phase” reads, even if the data
+partitioning pattern is 1D contiguous, non-interleaved, non-overlapping,
+like the one used in your HDF5Proxy test program. If two-phase is used,
+the current Cray MPI-IO using MPI_Isend in the communication phase may
+show poor performance for large request sizes. A better solution is
+to use MPI_Issend instead. Qiao ran E3SM-IO recently and observed a
+significant improvement if using issend.
+
+Although the above solution is not available in Cray MPI, given
+the I/O pattern in your test program, I suggest to add the ROMIO
+hint romio_cb_read and set it to disable, i.e.
+  export MPICH_MPIIO_HINTS="*:romio_cb_read=disable”
+
+This effectively disables the two-phase and lets all processes read
+its requests directly from Lustre. I expect some improvement for
+adding this hint alone.
+
+Wei-keng
+
+Yes I agree, this is very good. I’ll see if I can find some Trinitite IOR benchmarking to add in a reply to your email that shows what the system was capable of when we originally fielded it.
+ 
+I have a couple hypotheses on things that could improve performance (hdf extent preallocation being the chief one), but I will be interested to see the discussion about those graphs.
+ 
+Cheers,
+Brad
+ 
+
