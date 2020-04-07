@@ -40,21 +40,21 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
   // H5Pcreate is a general property list create function
   // Here we are creating properties for file access
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);
-  assert(file_access_plist_id);
+  assert(file_access_plist_id >= 0);
 
   // Stores the MPI parameters -- comm, info -- in the property list
   int iret = H5Pset_fapl_mpio(file_access_plist_id, mpi_hdf5_comm, mpi_info);
-  assert(iret != -1);
+  assert(iret >= 0);
 
   // Open the file collectively
-  assert(hdf5_file_id == -1);
   // H5F_ACC_TRUNC is for overwrite existing file if it exists. H5F_ACC_EXCL is no overwrite
   // 3rd argument is file creation property list. Using default here
   // 4th argument is the file access property list identifier
   hdf5_file_id = H5Fcreate(file_name.c_str(), H5F_ACC_TRUNC, file_creation_plist_id, file_access_plist_id);
-  if(hdf5_file_id < 0 && rank == 0) {
-    std::cout << " H5Fcreate failed: " << hdf5_file_id << std::endl;
-    return false;
+  if (hdf5_file_id < 0) {
+      if (rank == 0)
+          std::cout << " H5Fcreate failed: " << hdf5_file_id << std::endl;
+      return false;
   }
   if (DEBUG && rank == 0){
     std::cout << " create HDF5 file " << file_name
@@ -64,7 +64,7 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
 
   // Terminates access to property list and frees all memory resources.
   iret = H5Pclose(file_access_plist_id);
-  assert(iret != -1);
+  assert(iret >= 0);
 
   return true;
 }
@@ -73,7 +73,6 @@ bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm 
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
-  hid_t file_creation_plist_id = H5P_DEFAULT;   // File creation property list
   hid_t file_access_plist_id   = H5P_DEFAULT;   // File access property list
   MPI_Info mpi_info  = MPI_INFO_NULL; // For MPI IO hints
 
@@ -81,18 +80,16 @@ bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm 
   // H5Pcreate is a general property list create function
   // Here we are creating properties for file access
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);
-  assert(file_access_plist_id);
+  assert(file_access_plist_id >= 0);
 
   // Stores the MPI parameters -- comm, info -- in the property list
   int iret = H5Pset_fapl_mpio(file_access_plist_id, mpi_hdf5_comm, mpi_info);
-  assert(iret != -1);
+  assert(iret >= 0);
 
-  assert(hdf5_file_id == -1);
   hdf5_file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDWR, file_access_plist_id);
-  if(hdf5_file_id < 0 && rank == 0) {
-    std::cout << " H5Fopen failed: "
-              //<< hdf5_file_id
-              << std::endl;
+  if (hdf5_file_id < 0) {
+    if (rank == 0)
+        std::cout << " H5Fopen failed: " << std::endl;
     return false;
   }
   if (DEBUG && rank == 0){
@@ -110,9 +107,9 @@ bool close_hdf5_file(hid_t &hdf5_file_id, MPI_Comm mpi_hdf5_comm) {
   assert(hdf5_file_id >= 0);
   herr_t status;
   status = H5Fflush(hdf5_file_id, H5F_SCOPE_LOCAL);
-  assert(status == 0);
+  assert(status >= 0);
   status = H5Fclose(hdf5_file_id);
-  assert(status == 0);
+  assert(status >= 0);
   if (DEBUG && rank == 0){
      std::cout << " close HDF5 file_id " << hdf5_file_id
                << std::endl;
@@ -149,8 +146,9 @@ bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_nam
     dataset_creation_plist_id,                // Arg 6: dataset creation property list
     dataset_access_plist_id);                 // Arg 7: dataset access property list
 
-  if(dataset_id < 0 && rank == 0) {
-    std::cout << " H5Dcreate2 failed: " << dataset_id << std::endl;
+  if(dataset_id < 0) {
+    if (rank == 0)
+        std::cout << " H5Dcreate2 failed: " << dataset_id << std::endl;
     H5Sclose(file_dataspace_id);
     H5Fclose(hdf5_file_id);
     return false;
@@ -166,15 +164,17 @@ bool create_hdf5_dataset(const hid_t hdf5_file_id, const std::string dataset_nam
 }
 
 bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, const double *buffer, long ncount, long displs, MPI_Comm mpi_hdf5_comm) {
+  herr_t status;
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
   hid_t data_access_plist_id = H5P_DEFAULT;
   hid_t dataset_id = H5Dopen2(hdf5_file_id, dataset_name.c_str(), data_access_plist_id);
-  if(dataset_id < 0 && rank == 0) {
-    std::cout << " H5Dopen2 failed: " << dataset_id << std::endl;
-    H5Fclose(hdf5_file_id);
-    return false;
+  if (dataset_id < 0) {
+     if (rank == 0)
+         std::cout << " H5Dopen2 failed: " << dataset_id << std::endl;
+     H5Fclose(hdf5_file_id);
+     return false;
   }
 
   const int ndims = 1;
@@ -183,42 +183,52 @@ bool write_data_to_hdf5(const hid_t &hdf5_file_id, const std::string dataset_nam
   count[0] = ncount;
   offset[0] = displs;
   hid_t mem_dataspace_id = H5Screate_simple(ndims, count, NULL);
+  assert(mem_dataspace_id >= 0);
 
   /*
    * Select hyperslab in the file.
    */
   hid_t file_dataspace_id = H5Dget_space(dataset_id);
+  assert(file_dataspace_id >= 0);
   if (DEBUG && rank == 0) std::cout << "Rank: "<< rank << " offset: " << displs << " count: " << ncount << std::endl;
   H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
 
   // Create property list for collective dataset write.
   hid_t xfer_plist_id = H5Pcreate(H5P_DATASET_XFER);
-  H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_COLLECTIVE);
-    
+  assert(xfer_plist_id >= 0);
+
+  status = H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_COLLECTIVE);
+  assert(status >= 0);
+
   // To write dataset independently use
   //    H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_INDEPENDENT);
     
-  herr_t      status;
   status = H5Dwrite(dataset_id, H5T_IEEE_F64LE, mem_dataspace_id, file_dataspace_id,
                     xfer_plist_id, buffer);
-  assert(status == 0);
+  assert(status >= 0);
+  status = H5Sclose(mem_dataspace_id);
+  assert(status >= 0);
+  status = H5Sclose(file_dataspace_id);
+  assert(status >= 0);
   status = H5Pclose(xfer_plist_id);
-  assert(status == 0);
+  assert(status >= 0);
   status = H5Dclose(dataset_id);
-  assert(status == 0);
+  assert(status >= 0);
   return true;
 }
 
 bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_name, double *buffer, long ncount, long displs, MPI_Comm mpi_hdf5_comm) {
+  herr_t status;
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
   hid_t data_access_plist_id = H5P_DEFAULT;
   hid_t dataset_id = H5Dopen2(hdf5_file_id, dataset_name.c_str(), data_access_plist_id);
-  if(dataset_id < 0 && rank == 0) {
-    std::cout << " H5Dopen2 failed: " << dataset_id << std::endl;
-    H5Fclose(hdf5_file_id);
-    return false;
+  if (dataset_id < 0) {
+      if (rank == 0)
+          std::cout << " H5Dopen2 failed: " << dataset_id << std::endl;
+      H5Fclose(hdf5_file_id);
+      return false;
   }
 
   const int ndims = 1;
@@ -227,25 +237,35 @@ bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_na
   count[0] = ncount;
   offset[0] = displs;
   hid_t mem_dataspace_id = H5Screate_simple(ndims, count, NULL);
+  assert(mem_dataspace_id >= 0);
 
   /*
    * Select hyperslab in the file.
    */
   hid_t file_dataspace_id = H5Dget_space(dataset_id);
-  H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
+  assert(file_dataspace_id >= 0);
+
+  status = H5Sselect_hyperslab(file_dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
+  assert(status >= 0);
 
   // Create property list for collective dataset write.
   hid_t xfer_plist_id = H5Pcreate(H5P_DATASET_XFER);
-  H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_COLLECTIVE);
+  assert(xfer_plist_id >= 0);
+
+  status = H5Pset_dxpl_mpio(xfer_plist_id, H5FD_MPIO_COLLECTIVE);
+  assert(status >= 0);
     
-  herr_t status;
   status = H5Dread(dataset_id, H5T_IEEE_F64LE, mem_dataspace_id, file_dataspace_id,
                    xfer_plist_id, buffer);
-  assert(status == 0);
+  assert(status >= 0);
+  status = H5Sclose(mem_dataspace_id);
+  assert(status >= 0);
+  status = H5Sclose(file_dataspace_id);
+  assert(status >= 0);
   status = H5Pclose(xfer_plist_id);
-  assert(status == 0);
+  assert(status >= 0);
   H5Dclose(dataset_id);
-  assert(status == 0);
+  assert(status >= 0);
   return true;
 }
 
@@ -295,7 +315,7 @@ int main(int argc, char** argv) {
   // initialize HDF5 library
   // this is only really required for the Fortran interface
   return_val = H5open();
-  assert(return_val == 0);
+  assert(return_val >= 0);
 
   // create hdf5 file
   if (DEBUG && rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
