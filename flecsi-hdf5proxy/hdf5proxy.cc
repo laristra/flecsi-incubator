@@ -17,10 +17,9 @@
 #include <string>
 #include <iostream>
 #include <cstring>
+#include <unistd.h> /* getopt() */
 
-#ifndef DEBUG
-#define DEBUG 0
-#endif
+static int DEBUG;
 
 int RANKS_PER_FILE;
 //long BUFFER_SIZE; // number of elements in double
@@ -249,27 +248,48 @@ bool read_data_from_hdf5(const hid_t &hdf5_file_id, const std::string dataset_na
   return true;
 }
 
+static void
+usage(char *argv0)
+{
+    std::string help =
+    " [-h|-d] [-s size] [-n num] [-o out_dir]\n"
+    "       [-h] print this help message\n"
+    "       [-d] enable debug mode\n"
+    "       [-s size]: buffer size in bytes (default 400)\n"
+    "       [-n num]: number of output files (default 1)\n"
+    "       [-o out_dir]: output file directory name (default ./)\n";
+    std::cout<<"Usage: "<<argv0<<help<<std::endl;
+}
+
 int main(int argc, char** argv) {
   
   RANKS_PER_FILE = 4;
   long BUFFER_SIZE = 400;
   int nb_files = 1;
-  
-  for (int i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "-size")) {
-      BUFFER_SIZE = atol(argv[++i]);
-    }
-    
-    if (!strcmp(argv[i], "-nb_files")) {
-      nb_files = atoi(argv[++i]);
-    }
-  }
+  int i, world_size, rank, new_world_size, new_rank;
+  std::string out_dir = std::string(".");
 
-  MPI_Init(&argc, &argv);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  int world_size, rank, new_world_size, new_rank;
-  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    DEBUG = 0;
+    /* get command-line arguments */
+    while ((i = getopt(argc, argv, "hds:n:o:")) != EOF)
+        switch(i) {
+            case 's': BUFFER_SIZE = atol(optarg);
+                      break;
+            case 'n': nb_files = atol(optarg);
+                      break;
+            case 'o': out_dir = std::string(optarg);
+                      break;
+            case 'd': DEBUG = 1;
+                      break;
+            case 'h':
+            default:  if (rank==0) usage(argv[0]);
+                      MPI_Finalize();
+                      return 1;
+        }
 
   BUFFER_SIZE = (BUFFER_SIZE / world_size) * world_size;
   nb_files = world_size / (world_size / nb_files);
@@ -300,7 +320,7 @@ int main(int argc, char** argv) {
   // create hdf5 file
   if (DEBUG && rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
 
-  std::string file_name = "checkpoint_" + std::to_string(new_color);
+  std::string file_name = out_dir + "/checkpoint_" + std::to_string((long long int)new_color);
   return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
   assert(return_val == true);
 
