@@ -20,7 +20,7 @@ MEM_FRACTION=1/4
 SCRATCH_DIR=/lustre/ttscratch1/${USER}
 if [ ${USER} == "gshipman" ];
 then
-   EXEC=/usr/projects/eap/users/gshipman/hdf5proxy/hdf5proxy
+   EXEC=/usr/projects/eap/users/gshipman/hdf5proxy/flecsi-hdf5proxy/hdf5proxy
 else
    EXEC=/users/${USER}/flecsi-incubator/flecsi-hdf5proxy/hdf5proxy
 fi
@@ -34,7 +34,7 @@ echo "Memory per node is 96 GB. Writing out ${MEM_FRACTION} of node memory or ${
 for ranks_per_node in 32 64
 do
    echo ""
-   for nodes in 1 16 32 64 96
+   for nodes in 1 #16 32 64 96
    do
       dsizeGB=`echo "scale=2; ${nodes}*96*${MEM_FRACTION}" | bc -l`
       dsize=$(( nodes*96* 1024 * 1024 * 1024 *${MEM_FRACTION} ))
@@ -59,6 +59,8 @@ do
       echo "cd ${SCRATCH_DIR}/hdf5proxy"                 >> $BATCH_JOB
       echo "mkdir run${nodes}_${ranks_per_node}"         >> $BATCH_JOB
       echo "cd run${nodes}_${ranks_per_node}"            >> $BATCH_JOB
+      echo "export DARSHAN_OUTPUT_DIR=$PWD"              >> $BATCH_JOB
+      echo "export DXT_ENABLE_IO_TRACE=1"                >> $BATCH_JOB
       echo "echo \"$runstring \" "                       >> $BATCH_JOB
       echo "$runstring  "                                >> $BATCH_JOB
       echo $BATCH_JOB
