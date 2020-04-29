@@ -90,6 +90,12 @@ bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm 
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);
   assert(file_access_plist_id);
 
+  /* set collective mode for metadata reads */
+  H5Pset_all_coll_metadata_ops(file_access_plist_id, true);
+
+  /* set collective mode for metadata writes */
+  H5Pset_coll_metadata_write(file_access_plist_id, true);
+
   // Stores the MPI parameters -- comm, info -- in the property list
   int iret = H5Pset_fapl_mpio(file_access_plist_id, mpi_hdf5_comm, mpi_info);
   assert(iret != -1);
