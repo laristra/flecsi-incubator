@@ -52,6 +52,8 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
   int iret = H5Pset_fapl_mpio(file_access_plist_id, mpi_hdf5_comm, mpi_info);
   assert(iret != -1);
 
+  MPI_Info_free(&mpi_info);
+
   // Open the file collectively
   assert(hdf5_file_id == -1);
   // H5F_ACC_TRUNC is for overwrite existing file if it exists. H5F_ACC_EXCL is no overwrite
@@ -439,6 +441,7 @@ int main(int argc, char** argv) {
 
   free(buffer_checkpoint);
   free(buffer_recover);
+  MPI_Comm_free(&mpi_hdf5_comm);
 
   MPI_Finalize();
 }
