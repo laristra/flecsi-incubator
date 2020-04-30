@@ -24,7 +24,7 @@ static int DEBUG;
 int RANKS_PER_FILE;
 //long BUFFER_SIZE; // number of elements in double
 
-bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm)
+bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm, bool coll_metadata)
 {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
@@ -42,12 +42,13 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);
   assert(file_access_plist_id >= 0);
 
-  /* set collective mode for metadata reads */
-  H5Pset_all_coll_metadata_ops(file_access_plist_id, true);
+  if(coll_metadata){
+    /* set collective mode for metadata reads */
+    H5Pset_all_coll_metadata_ops(file_access_plist_id, true);
 
-  /* set collective mode for metadata writes */
-  H5Pset_coll_metadata_write(file_access_plist_id, true);
-
+    /* set collective mode for metadata writes */
+    H5Pset_coll_metadata_write(file_access_plist_id, true);
+  }
   // Stores the MPI parameters -- comm, info -- in the property list
   int iret = H5Pset_fapl_mpio(file_access_plist_id, mpi_hdf5_comm, mpi_info);
   assert(iret >= 0);
@@ -77,7 +78,7 @@ bool create_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Com
   return true;
 }
 
-bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm) {
+bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm mpi_hdf5_comm, bool coll_metadata) {
   int rank;
   MPI_Comm_rank(mpi_hdf5_comm, &rank);
 
@@ -89,13 +90,13 @@ bool open_hdf5_file(hid_t &hdf5_file_id, const std::string &file_name, MPI_Comm 
   // Here we are creating properties for file access
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);
   assert(file_access_plist_id >= 0);
+  if(coll_metadata){  
+    /* set collective mode for metadata reads */
+    H5Pset_all_coll_metadata_ops(file_access_plist_id, true);
 
-  /* set collective mode for metadata reads */
-  H5Pset_all_coll_metadata_ops(file_access_plist_id, true);
-
-  /* set collective mode for metadata writes */
-  H5Pset_coll_metadata_write(file_access_plist_id, true);
-
+    /* set collective mode for metadata writes */
+    H5Pset_coll_metadata_write(file_access_plist_id, true);
+  }
   // Stores the MPI parameters -- comm, info -- in the property list
   int iret = H5Pset_fapl_mpio(file_access_plist_id, mpi_hdf5_comm, mpi_info);
   assert(iret >= 0);
@@ -302,6 +303,7 @@ int main(int argc, char** argv) {
   long BUFFER_SIZE = 400;
   int nb_files = 1;
   int i, world_size, rank, new_world_size, new_rank;
+  bool coll_metadata = false;
   std::string out_dir = std::string(".");
 
     MPI_Init(&argc, &argv);
@@ -310,13 +312,15 @@ int main(int argc, char** argv) {
 
     DEBUG = 0;
     /* get command-line arguments */
-    while ((i = getopt(argc, argv, "hds:n:o:")) != EOF)
+    while ((i = getopt(argc, argv, "chds:n:o:")) != EOF)
         switch(i) {
             case 's': BUFFER_SIZE = atol(optarg);
                       break;
             case 'n': nb_files = atol(optarg);
                       break;
             case 'o': out_dir = std::string(optarg);
+                      break;
+            case 'c': coll_metadata = true; 
                       break;
             case 'd': DEBUG = 1;
                       break;
@@ -356,7 +360,7 @@ int main(int argc, char** argv) {
   if (DEBUG && rank == 0) std::cout << "Creating HDF5 file " << std::endl << world_size;
 
   std::string file_name = out_dir + "/checkpoint_" + std::to_string((long long int)new_color);
-  return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
+  return_val = create_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm, coll_metadata);
   assert(return_val == true);
 
 
@@ -409,7 +413,7 @@ int main(int argc, char** argv) {
 
   // checkpoint
   if (rank == 0) std::cout << "Writing checkpoint" << std::endl;
-  return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
+  return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm, coll_metadata);
   assert(return_val == true);
   return_val = write_data_to_hdf5(hdf5_file_id, "test_dataset", buffer_checkpoint, ncount, displs[new_rank], mpi_hdf5_comm);
   assert(return_val == true);
@@ -427,7 +431,7 @@ int main(int argc, char** argv) {
 
   // recover
   if (rank == 0) std::cout << "Recovering  checkpoint" << std::endl;
-  return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm);
+  return_val = open_hdf5_file(hdf5_file_id, file_name, mpi_hdf5_comm, coll_metadata);
   assert(return_val == true);
   return_val = read_data_from_hdf5(hdf5_file_id, "test_dataset", buffer_recover, ncount, displs[new_rank], mpi_hdf5_comm);
   assert(return_val == true);
